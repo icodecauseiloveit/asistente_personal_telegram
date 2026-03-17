@@ -16,6 +16,8 @@ data/
 .env
 .env.production
 .env.local
+credencialesgoogle.txt
+client_secret.json
 
 # Logs
 npm-debug.log*

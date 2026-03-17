@@ -3,7 +3,7 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /usr/src/app
 
 COPY package*.json ./
-RUN npm ci
+RUN apt-get update && apt-get install -y build-essential python3 && npm ci
 
 COPY . .
 RUN npm run build

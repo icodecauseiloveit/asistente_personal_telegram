@@ -32,6 +32,18 @@ export class SqliteChatRepository implements IChatRepository {
       )
     `);
 
+    // Migrations: Add columns if table already exists without them
+    const tableInfo = this.db.prepare("PRAGMA table_info(messages)").all() as any[];
+    const hasToolCalls = tableInfo.some(col => col.name === 'toolCalls');
+    const hasToolCallId = tableInfo.some(col => col.name === 'toolCallId');
+
+    if (!hasToolCalls) {
+      this.db.exec("ALTER TABLE messages ADD COLUMN toolCalls TEXT");
+    }
+    if (!hasToolCallId) {
+      this.db.exec("ALTER TABLE messages ADD COLUMN toolCallId TEXT");
+    }
+
     // Summaries Table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS summaries (

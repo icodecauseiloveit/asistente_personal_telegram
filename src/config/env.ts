@@ -21,6 +21,7 @@ export const env = {
     .map(id => parseInt(id.trim(), 10))
     .filter(id => !isNaN(id)),
   DATABASE_URL: process.env.DATABASE_URL || './database.sqlite',
+  GOG_ACCOUNT: process.env.GOG_ACCOUNT || '',
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
   NODE_ENV: process.env.NODE_ENV || 'development',
 };

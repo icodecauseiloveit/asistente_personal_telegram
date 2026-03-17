@@ -17,16 +17,17 @@ export class SqliteChatRepository implements IChatRepository {
     }
 
     this.db = new Database(dbPath);
-    // Habilitar modo WAL para mejor rendimiento y concurrencia
     this.db.pragma('journal_mode = WAL');
 
-    // Messages Table
+    // Messages Table (Added toolCalls and toolCallId)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         userId INTEGER NOT NULL,
         role TEXT NOT NULL,
-        content TEXT NOT NULL,
+        content TEXT,
+        toolCalls TEXT,
+        toolCallId TEXT,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -61,18 +62,34 @@ export class SqliteChatRepository implements IChatRepository {
   // --- Messages ---
   async getChatHistory(userId: number, limit: number = 30): Promise<ChatMessage[]> {
     const stmt = this.db.prepare(`SELECT * FROM messages WHERE userId = ? ORDER BY id DESC LIMIT ?`);
-    const rows = stmt.all(userId, limit) as ChatMessage[];
-    return rows.reverse();
+    const rows = stmt.all(userId, limit) as any[];
+    return rows.reverse().map(row => ({
+      ...row,
+      toolCalls: row.toolCalls ? JSON.parse(row.toolCalls) : undefined
+    }));
   }
 
   async getUnsummarizedMessages(userId: number, lastSummarizedId: number): Promise<ChatMessage[]> {
     const stmt = this.db.prepare(`SELECT * FROM messages WHERE userId = ? AND id > ? ORDER BY id ASC`);
-    return stmt.all(userId, lastSummarizedId) as ChatMessage[];
+    const rows = stmt.all(userId, lastSummarizedId) as any[];
+    return rows.map(row => ({
+      ...row,
+      toolCalls: row.toolCalls ? JSON.parse(row.toolCalls) : undefined
+    }));
   }
 
-  async saveMessage(userId: number, role: Role, content: string): Promise<number> {
-    const stmt = this.db.prepare(`INSERT INTO messages (userId, role, content) VALUES (?, ?, ?)`);
-    const info = stmt.run(userId, role, content);
+  async saveMessage(message: Omit<ChatMessage, 'id' | 'createdAt'>): Promise<number> {
+    const stmt = this.db.prepare(`
+      INSERT INTO messages (userId, role, content, toolCalls, toolCallId) 
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const info = stmt.run(
+      message.userId, 
+      message.role, 
+      message.content, 
+      message.toolCalls ? JSON.stringify(message.toolCalls) : null,
+      message.toolCallId || null
+    );
     return info.lastInsertRowid as number;
   }
 
@@ -80,7 +97,6 @@ export class SqliteChatRepository implements IChatRepository {
     const deleteMessages = this.db.prepare(`DELETE FROM messages WHERE userId = ?`);
     const deleteSummaries = this.db.prepare(`DELETE FROM summaries WHERE userId = ?`);
     
-    // Ejecutar en transacción
     const transaction = this.db.transaction(() => {
       deleteMessages.run(userId);
       deleteSummaries.run(userId);

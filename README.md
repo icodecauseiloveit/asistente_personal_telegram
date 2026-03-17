@@ -20,6 +20,7 @@ Bot de Telegram con IA integrada (**GPT-5 mini** preparado y Whisper para audios
 3. Renombra el archivo `.env.example` dejándolo solo como `.env` e ingresa tus datos:
    - `TELEGRAM_BOT_TOKEN="tu_token_aqui"`
    - `OPENAI_API_KEY="tu_clave_aqui"`
+   - `GOG_ACCOUNT="tu_email@gmail.com"` (Opcional, para herramientas Google)
    - Y de forma opcional, si quieres que el bot solo te hable a ti, averigua tu ID de Telegram y ponlo en `TELEGRAM_ALLOWED_USER_IDS="12345678"`.
 4. Inicia el bot:
    ```bash
@@ -27,6 +28,16 @@ Bot de Telegram con IA integrada (**GPT-5 mini** preparado y Whisper para audios
    ```
 
 El bot iniciará en la consola y podrás hablarle. Escríbele `/start` en Telegram.
+
+### 🔑 Integración con Google (Gmail, Calendar, Drive)
+El bot utiliza la herramienta `gog` para acceder a tus servicios de Google.
+1. Instala `gog` en tu sistema (si no está disponible).
+2. Ejecuta la autenticación inicial:
+   ```bash
+   gog auth credentials /ruta/a/client_secret.json
+   gog auth add tu_email@gmail.com --services gmail,calendar,drive,contacts,docs,sheets
+   ```
+3. El bot ahora podrá leer tus correos, agendar citas y buscar archivos cuando se lo pidas por Telegram.
 
 ---
 

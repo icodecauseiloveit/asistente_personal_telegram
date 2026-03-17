@@ -1,7 +1,7 @@
 // src/infrastructure/ai/openai.ts
 import OpenAI from 'openai';
 import { env } from '../../config/env';
-import { IAIService, Role, ChatMessage } from '../../domain/entities';
+import { IAIService, Role, ChatMessage, AIResponse, ToolCall } from '../../domain/entities';
 import fs from 'fs';
 import path from 'path';
 
@@ -14,16 +14,124 @@ export class OpenAIService implements IAIService {
     });
   }
 
-  async generateReply(messages: { role: Role; content: string }[]): Promise<string> {
+  private getTools(): OpenAI.Chat.ChatCompletionTool[] {
+    return [
+      {
+        type: 'function',
+        function: {
+          name: 'gmail_search',
+          description: 'Busca correos electrónicos en Gmail usando un query (ej. "from:ryanair in:inbox")',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Query de búsqueda de Gmail' },
+              max: { type: 'number', description: 'Número máximo de resultados', default: 10 }
+            },
+            required: ['query']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'gmail_send',
+          description: 'Envía un correo electrónico',
+          parameters: {
+            type: 'object',
+            properties: {
+              to: { type: 'string', description: 'Destinatario' },
+              subject: { type: 'string', description: 'Asunto' },
+              body: { type: 'string', description: 'Cuerpo del mensaje' }
+            },
+            required: ['to', 'subject', 'body']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'calendar_list_events',
+          description: 'Lista eventos del calendario',
+          parameters: {
+            type: 'object',
+            properties: {
+              calendarId: { type: 'string', description: 'ID del calendario (por defecto primary)', default: 'primary' },
+              from: { type: 'string', description: 'Fecha inicio ISO (ej. 2024-01-01T00:00:00Z)' },
+              to: { type: 'string', description: 'Fecha fin ISO' }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'calendar_create_event',
+          description: 'Crea un evento en el calendario',
+          parameters: {
+            type: 'object',
+            properties: {
+              calendarId: { type: 'string', description: 'ID del calendario', default: 'primary' },
+              summary: { type: 'string', description: 'Título del evento' },
+              from: { type: 'string', description: 'Fecha inicio ISO' },
+              to: { type: 'string', description: 'Fecha fin ISO' }
+            },
+            required: ['summary', 'from', 'to']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'drive_search',
+          description: 'Busca archivos en Google Drive',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Query de búsqueda' },
+              max: { type: 'number', default: 10 }
+            },
+            required: ['query']
+          }
+        }
+      }
+    ];
+  }
+
+  async generateReply(messages: ChatMessage[]): Promise<AIResponse> {
     const response = await this.openai.chat.completions.create({
       model: env.OPENAI_CHAT_MODEL,
       messages: messages.map(msg => ({
-        role: msg.role === 'assistant' ? 'assistant' : msg.role === 'system' ? 'system' : 'user',
+        role: msg.role === 'tool' ? 'tool' : (msg.role === 'assistant' ? 'assistant' : (msg.role === 'system' ? 'system' : 'user')),
         content: msg.content,
-      })),
+        tool_calls: msg.toolCalls,
+        tool_call_id: msg.toolCallId
+      } as any)),
+      tools: this.getTools(),
+      tool_choice: 'auto'
     });
 
-    return response.choices[0]?.message?.content || 'Sin respuesta.';
+    const choice = response.choices[0];
+    const message = choice.message;
+    
+    let toolCalls: ToolCall[] | undefined = undefined;
+    
+    if (message.tool_calls) {
+      toolCalls = message.tool_calls
+        .filter(tc => tc.type === 'function')
+        .map(tc => ({
+          id: tc.id,
+          type: 'function',
+          function: {
+            name: tc.function.name,
+            arguments: tc.function.arguments
+          }
+        }));
+    }
+    
+    return {
+      content: message.content || null,
+      toolCalls: toolCalls
+    };
   }
 
   async transcribeAudio(audioBuffer: Buffer): Promise<string> {

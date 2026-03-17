@@ -1,12 +1,23 @@
 // src/domain/entities.ts
 
-export type Role = 'system' | 'user' | 'assistant';
+export type Role = 'system' | 'user' | 'assistant' | 'tool';
+
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
 
 export interface ChatMessage {
   id?: number;
   userId: number;
   role: Role;
-  content: string;
+  content: string | null;
+  toolCalls?: ToolCall[];
+  toolCallId?: string;
   createdAt?: string;
 }
 
@@ -29,7 +40,7 @@ export interface IChatRepository {
   // Messages
   getChatHistory(userId: number, limit?: number): Promise<ChatMessage[]>;
   getUnsummarizedMessages(userId: number, lastSummarizedId: number): Promise<ChatMessage[]>;
-  saveMessage(userId: number, role: Role, content: string): Promise<number>;
+  saveMessage(message: Omit<ChatMessage, 'id' | 'createdAt'>): Promise<number>;
   clearHistory(userId: number): Promise<void>;
   
   // Summaries
@@ -42,8 +53,13 @@ export interface IChatRepository {
   clearMemories(userId: number): Promise<void>;
 }
 
+export interface AIResponse {
+  content: string | null;
+  toolCalls?: ToolCall[];
+}
+
 export interface IAIService {
-  generateReply(messages: { role: Role; content: string }[]): Promise<string>;
+  generateReply(messages: ChatMessage[]): Promise<AIResponse>;
   transcribeAudio(audioBuffer: Buffer): Promise<string>;
   extractMemories(text: string, currentMemories: string[]): Promise<string[]>;
   summarizeConversation(summary: string, newMessages: ChatMessage[]): Promise<string>;
